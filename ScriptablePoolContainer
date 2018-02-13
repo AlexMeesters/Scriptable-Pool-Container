@@ -1,0 +1,91 @@
+using UnityEngine;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine.SceneManagement;
+
+[CreateAssetMenu]
+public class ScriptablePoolContainer : ScriptableObject
+{
+    [SerializeField]
+    private GameObject prefab;
+
+    private List<GameObject> availableObjects;
+    private List<GameObject> usedObjects;
+
+    [SerializeField]
+    private int maxPoolSize;
+
+    public void OnEnable()
+    {
+        SceneManager.activeSceneChanged += OnSceneSwitch;
+
+        availableObjects = new List<GameObject>();
+        usedObjects = new List<GameObject>();
+    }
+
+    public void OnDisable()
+    {
+        SceneManager.activeSceneChanged -= OnSceneSwitch;
+    }
+
+    private void OnSceneSwitch (Scene s, Scene s2)
+    {
+        availableObjects.Clear();
+        usedObjects.Clear();
+    }
+
+    public void Return(Poolable _poolable)
+    {
+        availableObjects.Add(_poolable.gameObject);
+        usedObjects.Remove(_poolable.gameObject);
+    }
+
+    public GameObject Retrieve(Vector3 _position, Quaternion _rotation)
+    {
+        // Get first used object in case pool is exceeded
+        if (usedObjects.Count > maxPoolSize)
+        {
+            GameObject getUsedObject = usedObjects[0];
+            usedObjects.RemoveAt(0);
+            getUsedObject.transform.position = _position;
+            getUsedObject.transform.rotation = _rotation;
+            return getUsedObject;
+        }
+
+        // If nothing is available, create a new instance of the prefab
+        if (availableObjects.Count == 0)
+        {
+            GameObject newObject = GameObject.Instantiate(prefab, _position, _rotation);
+            Poolable poolableComponent = newObject.AddComponent<Poolable>();
+            poolableComponent.SetContainer(this);
+            usedObjects.Add(newObject);
+            return newObject;
+        }
+        else
+        {
+            GameObject getObject = availableObjects[availableObjects.Count - 1];
+            availableObjects.RemoveAt(availableObjects.Count - 1);
+            getObject.transform.position = _position;
+            getObject.transform.rotation = _rotation;
+            getObject.SetActive(true);
+
+            return getObject;
+        }
+    }
+}
+
+public class Poolable : MonoBehaviour
+{
+    private ScriptablePoolContainer poolContainer;
+
+    public void SetContainer(ScriptablePoolContainer _container)
+    {
+        poolContainer = _container;
+    }
+
+    private void OnDisable()
+    {
+        poolContainer.Return(this);
+    }
+}
+
